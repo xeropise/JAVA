@@ -227,3 +227,86 @@
       return unitCircle.contains(p);
   }
   ```
+
+  - 이 기능을 구현하는 가장 빠른 방법은 아니지만, 어쨌든 동작은 한다. 이제 값을 추가하지 않는 방식으로 Point를 확장해보자. 만들어진 인스턴스의 개수를 생성자에서 세보도록 하자.
+
+  ```java
+  public class CountPoint extends Point {
+      private static final AtomicInteger counter = new AtomicInteger();
+
+      public CountPoint(int x, int y){
+          super(x, y);
+          counter.incrementAndGet();
+      }
+      public static int numberCreated() { return counter.get(); }
+  }
+  ```
+
+- [리스코프 치환 원칙](https://pizzasheepsdev.tistory.com/9)에 따르면, 어떤 타입에 있어 중요한 속성이라면 그 하위 탕비에서도 마찬가지로 중요하므로 그 타입의 모든 메서드가 하위 타입에서도 똑같이 잘 작동해야 한다.
+
+- CounterPoint 인스턴스를 onUnitCircle 메서드에 넘기면, Point 클래스의 equals 를 getClass를 사용해 작성했다면 onUnitCircle 은 false를 반환할 것이다.
+
+- 컬렉션 구현체에서 주어진 원소를 담고 있는지를 확인하는 방법에 있는데 onUnitCircle 에서 Set을 포함한 대부분의 컬렉션은 이 작업에 equals 메서드를 사용하는데, CounterPoint 의 인스턴스는 어떤 Point와도 같을 수 없기 떄문이다. 반면, Point의 equals를 instanceof 기반으로 올바르게 구현했다면 CounterPoint 인스턴스를 건네줘도 onUnitCircle 메서드가 제대로 동작할 것이다.
+
+- 구체 클래스의 하위 클래스에서 값을 추가할 방법은 없지만 괜찮은 우회방법이 있는데, 컴포지션을 이용하는 방법이 있긴하다.
+
+```Java
+public class ColorPoint {
+  private final Point point;
+  private final Color clor;
+
+  public ColorPoint(int x, int y, Color color) {
+    point = new Point(x, y);
+    this.color = Objects.requireNonNull(color);
+  }
+
+  public Point asPoint() {
+    return point;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (!(o instanceof ColorPoint))
+      return false;
+    ColorPoint cp = (ColorPoint) o;
+    return cp.point.equals(point) && cp.color.equals(color);
+  }
+}
+```
+
+- 비슷한 방법을 이용한 클래스가 자바 라이브러리에도 있는데 java.sql.Timestamp 는 java.util.Date 를 확장한 후 nanoseconds 필드를 추가했다. 그 결과로 Timestamp의 equals 는 대칭성을 위배하며, Date 객체와 한 컬렉션에 넣거나 서로 섞어 사용하면 엉뚱하게 동작할 수 있다.
+
+- 그래서 Timestamp의 API 설명에는 Date와 섞어 쓸때의 주의사항을 언급하고 있다.
+
+- 일관성은 두 객체가 같다면 (어느 하나 혹은 모두가 수정되지 않는 한 ) 앞으로도 영원히 같아야 한다는 뜼으로, 가변 객체는 비교 시점에 따라 서로 다를수도 혹은 같을 수도 있는 반면에, 불변 객체는 한번 다르면 끝까지 달라야 한다.
+
+- **클래스가 불변이든 가변이든 equals의 판단에 신뢰할 수 없는 자원이 끼어들게 해서는 안 된다.**
+  예컨대 java.net.URL 의 equals 는 주어진 URL과 매핑된 호스트의 IP 주소를 이용해 비교하는데. 호스트 이름을 IP주소로 바꾸려면 네트워크를 통해야 하는데, 그 결과가 항상 같다고 보장할 수 없으므로 이렇게 구현하는 것은 큰 실수이다.
+
+- equals는 항시 메모리에 존재하는 객체만을 사용한 결정적 계산만 수행해야 한다.
+
+- 마지막 요건은 null-아님 으로 모든 객체가 null과 같지 않아야 한다는 뜻이다. 의도해서 o.equals(null) 이 true를 반환하는 경우야 없기는 하지만, 실수로 NullPointerException 을 던지는 코드는 흔하므로 보통 많은 클래스가 다음 처럼 null인지를 확인 해 자신을 보호한다.
+
+```java
+// 명시적 null 검사 - 필요 없다
+@Override
+public boolean equals(Object o) {
+  if (o == null)
+    return false;
+  ...
+}
+```
+
+- 동치성을 검사하려면 equals는 건네받은 객체를 적절히 형변환한 후 필수 필드들의 값을 알아내야 한다. 그러려면 형변환에 앞서 instanceof 연산자로 입력 매개변수가 올바른 타입인지 검사해야 한다.
+
+```java
+@Override
+public boolean equals(Object o){
+  if (!(o instanceof MyType))
+    return false;
+  MyType mt = (MyType) o;
+  ...
+}
+```
+
+- equals가 타입을 확인하지 않으면 잘못된 타입이 인수로 주어졌을 떄 ClassCastException 을 던져서 일반 규약을 윕하게 된다. 그런데 instanceof 는 첫 번쨰 피연산자가 null이면 false를 반환한다. 따라서 null이면 타입 확인 단계에서 false를 반환하기 떄문이 null 검사를 명시적으로 하지 않아도 된다.
