@@ -2,6 +2,8 @@
 
 - 복제 라고 표현하고 있는데, 사실 개발을 하면서 비슷한 "복사" 라고 착각 하는 방법으로 얕은 복사를 이용했었다.
 
+<br>
+
 ## 얕은 복사(Shallow Copy) vs 깊은 복사(Deep Copy)
 
 **1. 얕은 복사(Shallow Copy)**
@@ -43,9 +45,42 @@ protected native Object clone() throws CloneNotSupportedException;
 
 - Cloneable 인터페이스를 구현하여야 Object의 Clone 메소드를 사용할 수 있는 것이다. ([마커 인터페이스](http://wonwoo.ml/index.php/post/1389)로 작동)
 
-- 일반적인 Clone 메소드의 규약은 다음과 같다.
+- 일반적인 Clone 메소드의 규약은 다음과 같다. 어떤 객체 x에 대해 다음 식은 참이지만 필수는 아니다.
 
+```java
 1. x.clone() != x
-2. x.clone().getClass() == x.getClass()
-3. x.clone().equals(X)
-4. x.clone().getClass() = x.getClass()
+
+// 관례상, 이 메서드가 반환하는 객체는 super.clone 을 호출해 얻어야 한다.
+2. x.clone().equals(x)
+
+// 이 클래스와 (Object를 제외한) 모든 상위 클래스는 다음식이 참이다.
+3. x.clone().getClass() == x.getClass()
+```
+
+- clone 메서드가 super.clone 이 아닌, 생성자를 호출해 얻은 인스턴스를 반환해도 컴파일러는 불평하지 않을 것이다.
+
+```java
+@Overrdie
+public TestClass clone() {
+    return new TestClass(.....);
+}
+```
+
+- 하지만 이 클래스의 하위 클래스에서 super.clone 을 호출한다면 잘못된 클래스 객체가 만들어져, 하위 클래스의 clone 메서드가 제대로 동작하지 않게 될 수 있다. ( clone 을 재정의한 클래스가 final 이라면 하위클래스가 없어 무시할 수 있다. )
+
+- 제대로 동작하는 clone 메서드를 가진 상위 클래스르 상속해 Cloneable 을 구현하고 싶다고 하면 기존의 PhoneNumber 클래스를 다음과 같이 구현할 수 있다.
+
+```java
+@Override
+public PhoneNumber clone() {
+    try {
+        return (PhoneNumber) super.clone();
+    } catch (CloneNotSupportedException e) {
+        throw new AssertionError();
+    }
+}
+```
+
+- Object의 clone 메서드는 Object 를 반환하지만 PhoneNumber의 clone 메서드는 PhoneNumber 를 반환하게 했다. 재정의한 메서드의 반환 타입은 상위 클래스의 메서드가 반환하는 타입의 하위 타입일 수 있으므로 클라이언트가 형변환하지 않아도 되게끔 하였다.
+
+- **clone 메서드는 사실상 생성자와 같은 효과를 내는데, 원본 객체에 아무런 해를 끼치지 않는 동시에 복제된 객체의 불변식을 보장해야 한다.**
